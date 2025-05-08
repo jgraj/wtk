@@ -5,5 +5,22 @@
 #define WTK_PANIC(...) WTK_LOG(__VA_ARGS__); std::exit(1);
 #endif
 
-#include "http/http.cpp"
-#include "json/json.cpp"
+#include <netdb.h>
+#include <fcntl.h>
+#include <openssl/ssl.h>
+#include <openssl/err.h>
+
+namespace wtk {
+	#include "addr.cpp"
+	#include "socket/server.cpp"
+	#include "socket/client.cpp"
+	#include "http/response.cpp"
+	#include "http/request.cpp"
+	#include "json.cpp"
+
+	void init() {
+		::SSL_library_init();
+		::OpenSSL_add_all_algorithms();
+		::SSL_load_error_strings();
+	}
+}

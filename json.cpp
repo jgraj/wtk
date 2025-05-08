@@ -1,30 +1,59 @@
-#include "json.hpp"
+namespace json {
+	struct Field;
 
-namespace wtk::json {
+	struct Value {
+		enum class Type {
+			Error, Object, Array, String, Number, Bool, Null,
+		};
+		
+		union {
+			gar<Field> fields = gar<Field>();
+			gar<Value> array;
+			gar<char> string;
+			double number;
+			bool boolean;
+		};
+		Type type;
+
+		static Value of_type(Type type);
+		void destroy();
+		Value get_value(const char* name) const;
+	};
+
+	struct Field {
+		gar<char> name;
+		Value value;
+
+		void destroy() {
+			this->name.destroy();
+			this->value.destroy();
+		}
+	};
+
 	Value Value::of_type(Type type) {
 		Value value = Value();
 		value.type = type;
 		return value;
 	}
 
-	void Value::free() {
+	void Value::destroy() {
 		switch (type) {
 			case Type::Object: {
 				for (size_t i = 0; i < this->fields.len; ++i) {
-					this->fields[i].free();
+					this->fields[i].destroy();
 				}
-				this->fields.free();
+				this->fields.destroy();
 				break;
 			}
 			case Type::Array: {
 				for (size_t i = 0; i < this->array.len; ++i) {
-					this->array[i].free();
+					this->array[i].destroy();
 				}
-				this->array.free();
+				this->array.destroy();
 				break;
 			}
 			case Type::String: {
-				this->string.free();
+				this->string.destroy();
 				break;
 			}
 			default: {}
@@ -46,12 +75,7 @@ namespace wtk::json {
 		return Value::of_type(Value::Type::Error);
 	}
 
-	void Field::free() {
-		this->name.free();
-		this->value.free();
-	}
-
-	void skip_whitespace(ar<char> data, size_t* index) {
+	void skip_whitespace(ar<const char> data, size_t* index) {
 		while (*index < data.len) {
 			char character = data[*index];
 			if (character != ' ' && character != '\n' && character != '\r' && character != '\t') {
@@ -61,7 +85,7 @@ namespace wtk::json {
 		}
 	}
 
-	bool consume_char(ar<char> data, size_t* index, char expected) {
+	bool consume_char(ar<const char> data, size_t* index, char expected) {
 		if (*index >= data.len) {
 			return false;
 		}
@@ -72,7 +96,7 @@ namespace wtk::json {
 		return valid;
 	}
 
-	bool consume_str(ar<char> data, size_t* index, const char* expected) {
+	bool consume_str(ar<const char> data, size_t* index, const char* expected) {
 		size_t len = strlen(expected);
 		if (*index + len >= data.len) {
 			return false;
@@ -84,8 +108,8 @@ namespace wtk::json {
 		return valid;
 	}
 
-	gar<char> parse_string(ar<char> data, size_t* index) {
-		gar<char> string = gar<char>::alloc(8);
+	gar<char> parse_string(ar<const char> data, size_t* index) {
+		gar<char> string = gar<char>::create_auto();
 		while (*index < data.len) {
 			char character = data[*index];
 			*index += 1;
@@ -117,13 +141,13 @@ namespace wtk::json {
 			goto error;
 		}
 		error:
-		string.free();
+		string.destroy();
 		return gar<char>();
 	}
 
-	Value parse_value(ar<char>, size_t*);
+	Value parse_value(ar<const char>, size_t*);
 
-	Value parse_object(ar<char> data, size_t* index) {
+	Value parse_object(ar<const char> data, size_t* index) {
 		Value value = Value::of_type(Value::Type::Object);
 		value.fields = gar<Field>();
 		bool was_comma = false;
@@ -133,31 +157,31 @@ namespace wtk::json {
 			if (consume_char(data, index, '}')) {
 				return value;
 			} else if (value.fields.len != 0) {
-				value.fields.free();
+				value.fields.destroy();
 				return Value::of_type(Value::Type::Error);
 			}
 		}
 		if (!consume_char(data, index, '"')) {
-			value.fields.free();
+			value.fields.destroy();
 			return Value::of_type(Value::Type::Error);
 		}
 		gar<char> field_name = parse_string(data, index);
 		if (field_name.buf == nullptr) {
-			value.fields.free();
+			value.fields.destroy();
 			return Value::of_type(Value::Type::Error);
 		}
 		skip_whitespace(data, index);
 		if (!consume_char(data, index, ':')) {
-			value.fields.free();
+			value.fields.destroy();
 			return Value::of_type(Value::Type::Error);
 		}
 		Value field_value = parse_value(data, index);
 		if (field_value.type == Value::Type::Error) {
-			value.fields.free();
+			value.fields.destroy();
 			return Value::of_type(Value::Type::Error);
 		}
 		if (value.fields.buf == nullptr) {
-			value.fields = gar<Field>::alloc(8);
+			value.fields = gar<Field>::create_auto();
 		}
 		value.fields.push(Field(field_name, field_value));
 		skip_whitespace(data, index);
@@ -165,7 +189,7 @@ namespace wtk::json {
 		goto parse_field;
 	}
 
-	Value parse_array(ar<char> data, size_t* index) {
+	Value parse_array(ar<const char> data, size_t* index) {
 		Value value = Value::of_type(Value::Type::Array);
 		value.array = gar<Value>();
 		bool was_comma = false;
@@ -175,17 +199,17 @@ namespace wtk::json {
 			if (consume_char(data, index, ']')) {
 				return value;
 			} else if (value.array.len != 0) {
-				value.array.free();
+				value.array.destroy();
 				return Value::of_type(Value::Type::Error);
 			}
 		}
 		Value elem_value = parse_value(data, index);
 		if (elem_value.type == Value::Type::Error) {
-			value.array.free();
+			value.array.destroy();
 			return Value::of_type(Value::Type::Error);
 		}
 		if (value.array.buf == nullptr) {
-			value.array = gar<Value>::alloc(8);
+			value.array = gar<Value>::create_auto();
 		}
 		value.array.push(elem_value);
 		skip_whitespace(data, index);
@@ -193,8 +217,8 @@ namespace wtk::json {
 		goto parse_value;
 	}
 
-	Value parse_number(ar<char> data, size_t* index) {
-		gar<char> string = gar<char>::alloc(8);
+	Value parse_number(ar<const char> data, size_t* index) {
+		gar<char> string = gar<char>::create_auto();
 		if (data[*index] == '-') {
 			string.push('-');
 			*index += 1;
@@ -224,7 +248,7 @@ namespace wtk::json {
 		return value;
 	}
 
-	Value parse_value(ar<char> data, size_t* index) {
+	Value parse_value(ar<const char> data, size_t* index) {
 		skip_whitespace(data, index);
 		if (consume_char(data, index, '{')) {
 			return parse_object(data, index);
@@ -256,7 +280,7 @@ namespace wtk::json {
 		return parse_number(data, index);
 	}
 
-	Value parse(ar<char> data) {
+	Value parse(ar<const char> data) {
 		size_t index = 0;
 		return parse_value(data, &index);
 	}
