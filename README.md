@@ -1,9 +1,10 @@
-# wtk - Web Toolkit v0.3
+# wtk - Web Toolkit v0.4
 
 for GCC, C++20
+depenedencies: OpenSSL
 
-Uses [ctk](https://github.com/jgraj/ctk)
+Uses [ctk-0.19](https://github.com/jgraj/ctk)
 
-## wtk::sock - server/client sockets
-## wtk::http - HTTP requests
-## wtk::json - JSON parser
+## SocketServer, SocketClient
+## HTTP_Request, HTTP_Response
+## json - JSON parser

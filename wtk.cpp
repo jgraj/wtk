@@ -7,6 +7,7 @@
 
 #include <netdb.h>
 #include <fcntl.h>
+#include <poll.h>
 #include <openssl/ssl.h>
 #include <openssl/err.h>
 

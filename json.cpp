@@ -7,9 +7,9 @@ namespace json {
 		};
 		
 		union {
-			gar<Field> fields = gar<Field>();
-			gar<Value> array;
-			gar<char> string;
+			ctk::gar<Field> fields = ctk::gar<Field>();
+			ctk::gar<Value> array;
+			ctk::gar<u8> string;
 			double number;
 			bool boolean;
 		};
@@ -21,7 +21,7 @@ namespace json {
 	};
 
 	struct Field {
-		gar<char> name;
+		ctk::gar<u8> name;
 		Value value;
 
 		void destroy() {
@@ -67,7 +67,7 @@ namespace json {
 		}
 		size_t name_len = strlen(name);
 		for (size_t a = 0; a < this->fields.len; ++a) {
-			gar<char> field_name = this->fields[a].name;
+			ctk::gar<u8> field_name = this->fields[a].name;
 			if (field_name.len == name_len && std::memcmp(field_name.buf, name, name_len) == 0) {
 				return this->fields[a].value;
 			}
@@ -75,7 +75,7 @@ namespace json {
 		return Value::of_type(Value::Type::Error);
 	}
 
-	void skip_whitespace(ar<const char> data, size_t* index) {
+	void skip_whitespace(ctk::ar<const u8> data, size_t* index) {
 		while (*index < data.len) {
 			char character = data[*index];
 			if (character != ' ' && character != '\n' && character != '\r' && character != '\t') {
@@ -85,7 +85,7 @@ namespace json {
 		}
 	}
 
-	bool consume_char(ar<const char> data, size_t* index, char expected) {
+	bool consume_char(ctk::ar<const u8> data, size_t* index, char expected) {
 		if (*index >= data.len) {
 			return false;
 		}
@@ -96,7 +96,7 @@ namespace json {
 		return valid;
 	}
 
-	bool consume_str(ar<const char> data, size_t* index, const char* expected) {
+	bool consume_str(ctk::ar<const u8> data, size_t* index, const char* expected) {
 		size_t len = strlen(expected);
 		if (*index + len >= data.len) {
 			return false;
@@ -108,10 +108,10 @@ namespace json {
 		return valid;
 	}
 
-	gar<char> parse_string(ar<const char> data, size_t* index) {
-		gar<char> string = gar<char>::create_auto();
+	ctk::gar<u8> parse_string(ctk::ar<const u8> data, size_t* index) {
+		ctk::gar<u8> string = ctk::gar<u8>::create_auto();
 		while (*index < data.len) {
-			char character = data[*index];
+			u8 character = data[*index];
 			*index += 1;
 			if (character == '"') {
 				return string;
@@ -142,14 +142,14 @@ namespace json {
 		}
 		error:
 		string.destroy();
-		return gar<char>();
+		return ctk::gar<u8>();
 	}
 
-	Value parse_value(ar<const char>, size_t*);
+	Value parse_value(ctk::ar<const u8>, size_t*);
 
-	Value parse_object(ar<const char> data, size_t* index) {
+	Value parse_object(ctk::ar<const u8> data, size_t* index) {
 		Value value = Value::of_type(Value::Type::Object);
-		value.fields = gar<Field>();
+		value.fields = ctk::gar<Field>();
 		bool was_comma = false;
 		parse_field:
 		skip_whitespace(data, index);
@@ -165,7 +165,7 @@ namespace json {
 			value.fields.destroy();
 			return Value::of_type(Value::Type::Error);
 		}
-		gar<char> field_name = parse_string(data, index);
+		ctk::gar<u8> field_name = parse_string(data, index);
 		if (field_name.buf == nullptr) {
 			value.fields.destroy();
 			return Value::of_type(Value::Type::Error);
@@ -181,7 +181,7 @@ namespace json {
 			return Value::of_type(Value::Type::Error);
 		}
 		if (value.fields.buf == nullptr) {
-			value.fields = gar<Field>::create_auto();
+			value.fields = ctk::gar<Field>::create_auto();
 		}
 		value.fields.push(Field(field_name, field_value));
 		skip_whitespace(data, index);
@@ -189,9 +189,9 @@ namespace json {
 		goto parse_field;
 	}
 
-	Value parse_array(ar<const char> data, size_t* index) {
+	Value parse_array(ctk::ar<const u8> data, size_t* index) {
 		Value value = Value::of_type(Value::Type::Array);
-		value.array = gar<Value>();
+		value.array = ctk::gar<Value>();
 		bool was_comma = false;
 		parse_value:
 		skip_whitespace(data, index);
@@ -209,7 +209,7 @@ namespace json {
 			return Value::of_type(Value::Type::Error);
 		}
 		if (value.array.buf == nullptr) {
-			value.array = gar<Value>::create_auto();
+			value.array = ctk::gar<Value>::create_auto();
 		}
 		value.array.push(elem_value);
 		skip_whitespace(data, index);
@@ -217,8 +217,8 @@ namespace json {
 		goto parse_value;
 	}
 
-	Value parse_number(ar<const char> data, size_t* index) {
-		gar<char> string = gar<char>::create_auto();
+	Value parse_number(ctk::ar<const u8> data, size_t* index) {
+		ctk::gar<char> string = ctk::gar<char>::create_auto();
 		if (data[*index] == '-') {
 			string.push('-');
 			*index += 1;
@@ -248,8 +248,11 @@ namespace json {
 		return value;
 	}
 
-	Value parse_value(ar<const char> data, size_t* index) {
+	Value parse_value(ctk::ar<const u8> data, size_t* index) {
 		skip_whitespace(data, index);
+		if (*index >= data.len) {
+			return Value::of_type(Value::Type::Error);
+		}
 		if (consume_char(data, index, '{')) {
 			return parse_object(data, index);
 		}
@@ -280,7 +283,7 @@ namespace json {
 		return parse_number(data, index);
 	}
 
-	Value parse(ar<const char> data) {
+	Value parse(ctk::ar<const u8> data) {
 		size_t index = 0;
 		return parse_value(data, &index);
 	}
